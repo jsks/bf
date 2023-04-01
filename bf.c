@@ -25,11 +25,12 @@
 
 #include <assert.h>
 #include <err.h>
+#include <getopt.h>
 #include <libgen.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -92,6 +93,33 @@ typedef struct {
   ptrdiff_t data[STACK_SIZE];
   size_t len;
 } lifo;
+
+static const char *progname;
+
+static struct option longopts[] = {
+  {"help",       no_argument, NULL, 'h'},
+  { "print-ast", no_argument, NULL, 'p'},
+  { "version",   no_argument, NULL, 'v'},
+  { NULL,        no_argument, NULL, 0  }
+};
+
+void version(void) {
+  printf("-[----->+<]>---.--.++.--.+++.>++++++++++.\n");
+}
+
+void usage(FILE *stream) {
+  fprintf(stream, "Usage: %s [option] [infile]\n", progname);
+}
+
+void help(void) {
+  usage(stdout);
+  printf("\n");
+  printf("A simple brainfuck interpreter.\n\n"
+         "Options:\n"
+         "  -h, --help\t\t Useless help message\n"
+         "  -p, --print-ast\t Print parsed AST without executing infile\n"
+         "  -v, --version\t\t Print version number\n");
+}
 
 program_t *init_program(size_t capacity) {
   program_t *p;
@@ -291,7 +319,7 @@ void run(program_t *program) {
 
 off_t file_size(char *file) {
   struct stat at;
-  if (stat(file, &at) != 0)
+  if (lstat(file, &at) != 0)
     err(EXIT_FAILURE, "%s", file);
 
   return at.st_size;
@@ -321,15 +349,44 @@ char *read_file(char *file) {
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 2)
-    errx(EXIT_FAILURE, "Usage: %s <program.bf>", basename(argv[0]));
+  progname = basename(argv[0]);
 
-  char *buffer = read_file(argv[1]);
+  bool debug_ast = false;
+  int opt;
+  if ((opt = getopt_long(argc, argv, "hpv", longopts, NULL)) != -1) {
+    switch (opt) {
+      case 'h':
+        help();
+        exit(EXIT_SUCCESS);
+      case 'v':
+        version();
+        exit(EXIT_SUCCESS);
+      case 'p':
+        debug_ast = true;
+        break;
+      default:
+        usage(stderr);
+        exit(EXIT_FAILURE);
+    }
+  }
+
+  if (!(optind < argc)) {
+    usage(stderr);
+    errx(EXIT_FAILURE, "No input file");
+  }
+
+  char *buffer = read_file(argv[optind]);
   program_t *program = parse(buffer);
-  run(program);
 
+  if (debug_ast)
+    print_ast(program);
+  else
+    run(program);
+
+#ifdef DEBUG
   destroy_program(&program);
   free(buffer);
+#endif
 
   return 0;
 }
