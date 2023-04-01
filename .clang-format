@@ -1,0 +1,12 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+AlignArrayOfStructures: Left
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+ColumnLimit: 80
+Cpp11BracedListStyle: false
+IndentCaseLabels: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+SpaceAfterCStyleCast: true
+...
