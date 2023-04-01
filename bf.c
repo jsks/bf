@@ -123,7 +123,8 @@ void help(void) {
 
 program_t *init_program(size_t capacity) {
   program_t *p;
-  if (!(p = malloc(sizeof(program_t))) || !(p->ops = malloc(capacity * sizeof(op))))
+  if (!(p = malloc(sizeof(program_t))) ||
+      !(p->ops = malloc(capacity * sizeof(op))))
     err(EXIT_FAILURE, NULL);
 
   p->n = 0;
@@ -142,10 +143,7 @@ void add_op(program_t *program, op_code code, ssize_t arg, ssize_t offset) {
   if (program->n == program->len)
     resize_program(program);
 
-  program->ops[program->n].code = code;
-  program->ops[program->n].arg = arg;
-  program->ops[program->n].offset = offset;
-
+  program->ops[program->n] = (op){ .code = code, .arg = arg, .offset = offset };
   program->n++;
 }
 
