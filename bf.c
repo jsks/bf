@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Joshua Krusell
+ * Copyright (c) 2023, Joshua Krusell
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -39,25 +39,38 @@
 #define STACK_SIZE 256
 #define PROGRAM_SIZE 1024
 
-#define SIGN(x) ((x > 0) - (x < 0))
+#ifdef _BF_STRICT_CHECKS
+#define BOUNDS_CHECK(i)                                                        \
+  if (i < 0 || i >= TAPE_SIZE)                                                 \
+    errx(EXIT_FAILURE, "Out-of-bounds memory access at position %d", i);
 
-#define BOUNDS_CHECK(i) assert(i >= 0 || i < TAPE_SIZE)
-#define OVERFLOW_CHECK(x, y) assert(x < INT8_MAX - y)
-#define UNDERFLOW_CHECK(x, y) assert(x > INT8_MIN - y)
+#define OVERFLOW_CHECK(arr, pos, x)                                            \
+  if ((arr[pos]) >= INT8_MAX - x)                                              \
+    errx(EXIT_FAILURE, "Integer overflow at position %d", pos);
+
+#define UNDERFLOW_CHECK(arr, pos, x)                                           \
+  if ((arr[pos]) <= INT8_MIN + x)                                              \
+    errx(EXIT_FAILURE, "Integer underflow at position %d", pos);
+#else
+#define BOUNDS_CHECK(i)
+#define OVERFLOW_CHECK(arr, pos, x)
+#define UNDERFLOW_CHECK(arr, pos, x)
+#endif
 
 #define IS_EMPTY_STACK(stack) (stack.len == 0)
 #define POP_STACK(stack) stack.data[--stack.len]
-#define PUSH_STACK(stack, x) do {                               \
-    if (stack.len == STACK_SIZE)                                \
-      errx(EXIT_FAILURE, "Nested loops exceeded stack size");   \
-    stack.data[stack.len++] = x;                                \
+#define PUSH_STACK(stack, x)                                                   \
+  do {                                                                         \
+    if (stack.len == STACK_SIZE)                                               \
+      errx(EXIT_FAILURE, "Nested loops exceeded stack size");                  \
+    stack.data[stack.len++] = x;                                               \
   } while (0)
 
 typedef enum {
   ZERO,
   ZEROSEEK,
   ADD,
-  SHIFT,
+  MINUS,
   READ,
   PUT,
   JMP_FWD,
@@ -124,103 +137,103 @@ void destroy_program(program_t **program) {
 }
 
 void print_ast(program_t *program) {
-  const char *ops[] = { "ZERO", "ADD", "SHIFT", "READ",
-                        "PUT", "JMP_FWD", "JMP_BCK", "END" };
-  for (op *p = program->ops; p && p->code != END; p++) {
+  const char *ops[] = { "ZERO", "ZEROSEEK", "ADD",     "MINUS", "READ",
+                        "PUT",  "JMP_FWD",  "JMP_BCK", "END" };
+  for (op *p = program->ops; p && p->code != END; p++)
     printf("%s(%ld, %ld)\n", ops[p->code], p->arg, p->offset);
-  }
 
   printf("END\n");
 }
 
 bool is_valid_token(char ch) {
-  return ch == '+' || ch == '-' || ch == '>' || ch == '<' ||
-    ch == '.' || ch == ',' || ch == '[' || ch == ']';
+  return ch == '+' || ch == '-' || ch == '>' || ch == '<' || ch == '.' ||
+         ch == ',' || ch == '[' || ch == ']';
 }
 
 bool is_repeatable_token(char ch) {
-  return ch == '+' || ch == '-' || ch == '>' || ch == '<';
+  return ch == '+' || ch == '-';
 }
 
-char peek(char *s) {
+char *peek(char *s) {
   int ch;
-  while ((ch = *s++)) {
+  while ((ch = *(++s))) {
     if (!is_valid_token(ch))
       continue;
 
-    return ch;
+    return s;
   }
 
-  return '\0';
+  return NULL;
 }
 
 program_t *parse(char *s) {
   program_t *program = init_program(PROGRAM_SIZE);
 
-  int ch, prev_token = 0;
+  int ch, prev_token = 0, offset = 0, start_pos = 0;
+  char *next_token = NULL;
+  op *p;
   ptrdiff_t jmp_pos;
   lifo jmp_stack = { 0 };
-
-  int sgn = 1;
-  op *p = NULL;
 
   while ((ch = *s++)) {
     if (!is_valid_token(ch))
       continue;
 
     if (ch == prev_token && is_repeatable_token(ch)) {
-      last_op(program)->arg += 1 * SIGN(last_op(program)->arg);
+      last_op(program)->arg++;
       continue;
     } else {
       prev_token = ch;
     }
 
     switch (ch) {
-    case '-':
-      sgn = -1;;
-    case '+':
-      if ((p = last_op(program)) && p->code == SHIFT) {
-        pop_op(program);
-        add_op(program, ADD, 1 * sgn, p->arg);
-      } else {
-        add_op(program, ADD, 1 * sgn, 0);
-      }
+      case '-':
+        add_op(program, MINUS, 1, offset);
+        break;
+      case '+':
+        add_op(program, ADD, 1, offset);
+        break;
+      case '<':
+        offset--;
+        break;
+      case '>':
+        offset++;
+        break;
+      case '.':
+        add_op(program, PUT, 0, offset);
+        break;
+      case ',':
+        add_op(program, READ, 0, offset);
+        break;
+      case '[':
+        if (*s == '-' && (next_token = peek(s)) && *next_token == ']') {
+          add_op(program, ZERO, 0, offset);
+          s = next_token + 1;
+        } else {
+          add_op(program, JMP_FWD, 0, offset);
+          PUSH_STACK(jmp_stack, last_op(program) - program->ops);
+        }
+        break;
+      case ']':
+        if (IS_EMPTY_STACK(jmp_stack))
+          errx(EXIT_FAILURE, "Missing opening '['");
 
-      sgn = 1;
-      break;
-    case '<':
-      sgn = -1;
-    case '>':
-      add_op(program, SHIFT, 1 * sgn, 0);
-      sgn = 1;
-      break;
-    case '.':
-      add_op(program, PUT, 0, 0);
-      break;
-    case ',':
-      add_op(program, READ, 0, 0);
-      break;
-    case '[':
-      if (*s == '-' && peek(s) == ']') {
-        add_op(program, ZERO, 0, 0);
-        s += 2;
-      } else {
-        add_op(program, JMP_FWD, 0, 0);
-        PUSH_STACK(jmp_stack, last_op(program) - program->ops);
-      }
-      break;
-    case ']':
-      if (IS_EMPTY_STACK(jmp_stack))
-        errx(EXIT_FAILURE, "Missing opening '['");
-
-      jmp_pos = POP_STACK(jmp_stack);
-      program->ops[jmp_pos].arg = last_op(program) - program->ops + 1;
-
-      add_op(program, JMP_BCK, jmp_pos, 0);
-      break;
-    default:
-      break;
+        jmp_pos = POP_STACK(jmp_stack);
+        if ((p = last_op(program)) && p->code == JMP_FWD) {
+          start_pos = p->offset;
+          pop_op(program);
+          add_op(program, ZEROSEEK, offset, start_pos);
+        } else {
+          program->ops[jmp_pos].arg = last_op(program) - program->ops + 1;
+          add_op(program, JMP_BCK, jmp_pos, offset);
+        }
+        break;
+      default:
+        break;
     }
+
+    if (ch != '>' && ch != '<')
+      offset = 0;
   }
 
   if (!IS_EMPTY_STACK(jmp_stack))
@@ -230,44 +243,50 @@ program_t *parse(char *s) {
   return program;
 }
 
-int8_t run(program_t *program) {
+void run(program_t *program) {
   int8_t tape[TAPE_SIZE] = { 0 };
   int i = 0;
 
   for (op *p = program->ops; p->code != END; p++) {
+    i += p->offset;
+    BOUNDS_CHECK(i);
+
     switch (p->code) {
-    case ZERO:
-      tape[i] = 0;
-      break;
-    case ADD:
-      //      ADDITION_CHECK(tape[i], p->arg);
-      i += p->offset;
-      tape[i] += p->arg;
-      break;
-    case SHIFT:
-      i += p->arg;
-      BOUNDS_CHECK(i);
-      break;
-    case READ:
-      tape[i] = getchar();
-      break;
-    case PUT:
-      putchar(tape[i]);
-      break;
-    case JMP_FWD:
-      if (tape[i] == 0)
-        p = &program->ops[p->arg];
-      break;
-    case JMP_BCK:
-      if (tape[i] != 0)
-        p = &program->ops[p->arg];
-      break;
-    default:
-      break;
+      case ZERO:
+        tape[i] = 0;
+        break;
+      case ZEROSEEK:
+        while (tape[i] != 0) {
+          i += p->arg;
+          BOUNDS_CHECK(i);
+        }
+        break;
+      case ADD:
+        OVERFLOW_CHECK(tape, i, p->arg);
+        tape[i] += p->arg;
+        break;
+      case MINUS:
+        UNDERFLOW_CHECK(tape, i, p->arg);
+        tape[i] -= p->arg;
+        break;
+      case READ:
+        tape[i] = getchar();
+        break;
+      case PUT:
+        putchar(tape[i]);
+        break;
+      case JMP_FWD:
+        if (tape[i] == 0)
+          p = &program->ops[p->arg];
+        break;
+      case JMP_BCK:
+        if (tape[i] != 0)
+          p = &program->ops[p->arg];
+        break;
+      default:
+        break;
     }
   }
-
-  return tape[i];
 }
 
 off_t file_size(char *file) {
