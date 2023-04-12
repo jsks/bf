@@ -24,6 +24,7 @@
 #define _DEFAULT_SOURCE
 
 #include <err.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <libgen.h>
 #include <stdbool.h>
@@ -31,10 +32,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
-#define MAX_FILE_SIZE 8 * 1024 * 1024
+#define READ_SIZE 1024 * 8
+#define MAX_FILE_SIZE 1024 * 1024
 #define TAPE_SIZE 30000
 #define STACK_SIZE 256
 #define PROGRAM_SIZE 1024
@@ -103,7 +104,10 @@ static struct option longopts[] = {
 };
 
 void version(void) {
-  printf("-[----->+<]>---.--.++.--.+++.>++++++++++.\n");
+  printf("-[----->+<]>---.--.++.--.+++.----.[--->++++"
+         "+++<]>.+++++.++++++.+++[->+++<]>.++++++++++"
+         "+++.--.++.-------------.[--->+<]>---.+++[->"
+         "+++<]>.+++++++++++++.>++++++++++.\n");
 }
 
 void usage(FILE *stream) {
@@ -314,35 +318,22 @@ void run(program_t *program) {
   }
 }
 
-off_t file_size(char *file) {
-  struct stat at;
-  if (lstat(file, &at) != 0)
-    err(EXIT_FAILURE, "%s", file);
-
-  return at.st_size;
-}
-
-char *read_file(char *file) {
-  off_t fsize;
-  if ((fsize = file_size(file)) > MAX_FILE_SIZE)
-    errx(EXIT_FAILURE, "File %s exceeds read limits", file);
-
-  char *buffer;
-  if (!(buffer = malloc(fsize + 1)))
+void read_file(char *file, char *buffer) {
+  int fd;
+  if ((fd = open(file, O_RDONLY)) < 0)
     err(EXIT_FAILURE, NULL);
 
-  FILE *fp;
-  if (!(fp = fopen(file, "r")))
-    err(EXIT_FAILURE, "Unable to open file %s", file);
+  size_t len = 0;
+  ssize_t bytes_read = 0;
+  while ((bytes_read = read(fd, buffer + len, READ_SIZE)) > 0) {
+    len += bytes_read;
 
-  size_t len = fread(buffer, 1, fsize, fp);
-  if (ferror(fp))
-    errx(EXIT_FAILURE, "Error reading file %s", file);
+    if (len == MAX_FILE_SIZE - 1)
+      errx(EXIT_FAILURE, "File %s exceeds read limits", file);
+  }
 
-  buffer[len] = '\0';
-  fclose(fp);
-
-  return buffer;
+  if (bytes_read < 0 || close(fd) < 0)
+    err(EXIT_FAILURE, NULL);
 }
 
 int main(int argc, char *argv[]) {
@@ -372,7 +363,9 @@ int main(int argc, char *argv[]) {
     errx(EXIT_FAILURE, "No input file");
   }
 
-  char *buffer = read_file(argv[optind]);
+  char buffer[MAX_FILE_SIZE] = { 0 };
+  read_file(argv[optind], buffer);
+
   program_t *program = parse(buffer);
 
   if (debug_ast)
@@ -382,7 +375,6 @@ int main(int argc, char *argv[]) {
 
 #ifdef DEBUG
   destroy_program(&program);
-  free(buffer);
 #endif
 
   return 0;
