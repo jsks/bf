@@ -23,7 +23,6 @@
 
 #define _DEFAULT_SOURCE
 
-#include <assert.h>
 #include <err.h>
 #include <getopt.h>
 #include <libgen.h>
@@ -33,7 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <sys/types.h>
+#include <unistd.h>
 
 #define MAX_FILE_SIZE 8 * 1024 * 1024
 #define TAPE_SIZE 30000
@@ -168,7 +167,7 @@ void print_ast(program_t *program) {
   for (op *p = program->ops; p && p->code != END; p++)
     printf("%s(%ld, %ld)\n", ops[p->code], p->arg, p->offset);
 
-  printf("END\n");
+  printf("END\n\n");
 }
 
 bool is_valid_token(char ch) {
@@ -378,8 +377,8 @@ int main(int argc, char *argv[]) {
 
   if (debug_ast)
     print_ast(program);
-  else
-    run(program);
+
+  run(program);
 
 #ifdef DEBUG
   destroy_program(&program);
