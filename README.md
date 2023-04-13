@@ -10,7 +10,7 @@ $ ./jit <(./jit --version)
 Two programs are included in this repository: `bf.c` is a simple
 brainfuck interpreter implementing some fairly trivial optimizations
 and `jit.c` is a JIT compiler using `GNU libjit`. Run `./bf --help` or
-`./jit --help` to get started.
+`./jit --help` to get started. Only tested on Linux amd64.
 
 For some fun, we can run a [brainfuck
 interpreter](https://esolangs.org/wiki/Dbfi) written in brainfuck that
