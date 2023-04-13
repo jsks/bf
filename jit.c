@@ -28,6 +28,7 @@
 #include <libgen.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -270,7 +271,7 @@ int main(int argc, char *argv[]) {
   if (debug_instructions)
     jit_dump_function(stdout, program, "bf");
 
-  unsigned char tape[TAPE_SIZE] = { 0 };
+  uint8_t tape[TAPE_SIZE] = { 0 };
   BF_program fn = jit_function_to_closure(program);
   fn(tape);
 
