@@ -38,17 +38,15 @@
 #define MAX_FILE_SIZE 1024 * 1024
 #define TAPE_SIZE 30000
 #define STACK_SIZE 256
-#define PROGRAM_SIZE 1024
+#define PROGRAM_SIZE 4096
 
 #ifdef _BF_STRICT_CHECKS
 #define BOUNDS_CHECK(i)                                                        \
   if (i < 0 || i >= TAPE_SIZE)                                                 \
     errx(EXIT_FAILURE, "Out-of-bounds memory access at position %d", i);
-
 #define OVERFLOW_CHECK(arr, pos, x)                                            \
   if ((arr[pos]) >= INT8_MAX - x)                                              \
     errx(EXIT_FAILURE, "Integer overflow at position %d", pos);
-
 #define UNDERFLOW_CHECK(arr, pos, x)                                           \
   if ((arr[pos]) <= INT8_MIN + x)                                              \
     errx(EXIT_FAILURE, "Integer underflow at position %d", pos);
@@ -67,6 +65,10 @@
     stack.data[stack.len++] = x;                                               \
   } while (0)
 
+static const char *op_strings[] = { "ZERO",    "ZEROSEEK", "ADD",
+                                    "MINUS",   "READ",     "PUT",
+                                    "JMP_FWD", "JMP_BCK",  "END" };
+
 typedef enum {
   ZERO,
   ZEROSEEK,
@@ -78,6 +80,17 @@ typedef enum {
   JMP_BCK,
   END
 } op_code;
+
+#ifdef DEBUG
+#include <locale.h>
+
+#define TRACE(op) ncalls[op] += 1
+#define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
+
+static int ncalls[LEN(op_strings)] = { 0 };
+#else
+#define TRACE(op)
+#endif
 
 typedef struct {
   op_code code;
@@ -166,10 +179,8 @@ void destroy_program(program_t **program) {
 }
 
 void print_ast(program_t *program) {
-  const char *ops[] = { "ZERO", "ZEROSEEK", "ADD",     "MINUS", "READ",
-                        "PUT",  "JMP_FWD",  "JMP_BCK", "END" };
   for (op *p = program->ops; p && p->code != END; p++)
-    printf("%s(%ld, %ld)\n", ops[p->code], p->arg, p->offset);
+    printf("%s(%ld, %ld)\n", op_strings[p->code], p->arg, p->offset);
 
   printf("END\n\n");
 }
@@ -280,6 +291,7 @@ void run(program_t *program) {
     i += p->offset;
     BOUNDS_CHECK(i);
 
+    TRACE(p->code);
     switch (p->code) {
       case ZERO:
         tape[i] = 0;
@@ -374,6 +386,12 @@ int main(int argc, char *argv[]) {
   run(program);
 
 #ifdef DEBUG
+  setlocale(LC_NUMERIC, "");
+
+  printf("\n\nCalls per instruction:\n");
+  for (size_t i = 0; i < LEN(op_strings) - 1; i++)
+    printf("%-10s%'d\n", op_strings[i], ncalls[i]);
+
   destroy_program(&program);
 #endif
 
