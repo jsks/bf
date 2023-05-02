@@ -6,7 +6,7 @@ all: bf jit
 clean:
 	rm -f bf jit
 
-debug: CFLAGS += -DDEBUG -O0 -g -fsanitize=address
+debug: CFLAGS += -DDEBUG -O0 -g3 -fsanitize=address
 debug: clean bf jit
 
 fmt:

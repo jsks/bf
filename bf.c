@@ -21,8 +21,6 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#define _DEFAULT_SOURCE
-
 #include <err.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -35,7 +33,7 @@
 #include <unistd.h>
 
 #define READ_SIZE 1024 * 8
-#define MAX_FILE_SIZE 1024 * 1024
+#define MAX_FILE_SIZE 1024 * 1024 * 8
 #define TAPE_SIZE 30000
 #define STACK_SIZE 256
 #define PROGRAM_SIZE 4096
@@ -311,10 +309,10 @@ void run(program_t *program) {
         tape[i] -= p->arg;
         break;
       case READ:
-        tape[i] = getchar();
+        tape[i] = getchar_unlocked();
         break;
       case PUT:
-        putchar(tape[i]);
+        putchar_unlocked(tape[i]);
         break;
       case JMP_FWD:
         if (tape[i] == 0)
@@ -334,6 +332,8 @@ void read_file(char *file, char *buffer) {
   int fd;
   if ((fd = open(file, O_RDONLY)) < 0)
     err(EXIT_FAILURE, NULL);
+
+  posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 
   size_t len = 0;
   ssize_t bytes_read = 0;

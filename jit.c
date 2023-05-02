@@ -27,13 +27,13 @@
 #include <jit/jit.h>
 #include <libgen.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #define READ_SIZE 1024 * 8
-#define MAX_FILE_SIZE 1024 * 1024
+#define MAX_FILE_SIZE 1024 * 1024 * 8
 #define TAPE_SIZE 30000
 #define STACK_SIZE 256
 
@@ -162,12 +162,12 @@ void compile_bf(jit_function_t fn, char *s) {
         break;
       case '.':
         cell = jit_insn_load_relative(fn, tape, 0, jit_type_ubyte);
-        jit_insn_call_native(fn, "putchar", putchar, putchar_sig, &cell, 1,
-                             JIT_CALL_NOTHROW);
+        jit_insn_call_native(fn, "putchar_unlocked", putchar_unlocked,
+                             putchar_sig, &cell, 1, JIT_CALL_NOTHROW);
         break;
       case ',':
-        result = jit_insn_call_native(fn, "getchar", getchar, getchar_sig, NULL,
-                                      0, JIT_CALL_NOTHROW);
+        result = jit_insn_call_native(fn, "getchar_unlocked", getchar_unlocked,
+                                      getchar_sig, NULL, 0, JIT_CALL_NOTHROW);
         jit_insn_store_relative(fn, tape, 0, result);
         break;
       case '[':
@@ -211,6 +211,8 @@ void read_file(char *file, char *buffer) {
   int fd;
   if ((fd = open(file, O_RDONLY)) < 0)
     err(EXIT_FAILURE, NULL);
+
+  posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 
   size_t len = 0;
   ssize_t bytes_read = 0;
