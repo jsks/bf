@@ -5,12 +5,19 @@ Simple Brainfuck Interpreter and JIT Compiler
 $ make
 $ ./bf <(./bf --version)
 $ ./jit <(./jit --version)
+$ ./aot -e <(./aot --version)
 ```
 
-Two programs are included in this repository: `bf.c` is a simple
-brainfuck interpreter implementing some fairly trivial optimizations
-and `jit.c` is a JIT compiler using `GNU libjit`. Run `./bf --help` or
-`./jit --help` to get started. Only tested on Linux amd64.
+Three programs are included in this repository:
+
+1. `bf.c` is a simple brainfuck interpreter implementing some fairly
+   trivial optimizations.
+
+2. `jit.c` is a JIT compiler using `GNU libjit`.
+
+3. `aot.c` is an ahead-of-time compiler / JIT interpreter using `libgccjit`.
+
+Run `./<program> --help` to get started. Only tested on Linux amd64.
 
 For some fun, we can run a [brainfuck
 interpreter](https://esolangs.org/wiki/Dbfi) written in brainfuck that
@@ -27,17 +34,9 @@ Using [hyperfine](https://github.com/sharkdp/hyperfine) and the
 classic
 [mandelbrot.bf](http://esoteric.sange.fi/brainfuck/utils/mandelbrot/):
 
-```sh
-$ hyperfine --warmup 2 './jit mandelbrot.bf' './bf mandelbrot.bf'
-Benchmark 1: ./jit mandelbrot.bf
-  Time (mean ± σ):     825.4 ms ±   1.2 ms    [User: 823.9 ms, System: 1.5 ms]
-  Range (min … max):   824.1 ms … 827.2 ms    10 runs
-
-Benchmark 2: ./bf mandelbrot.bf
-  Time (mean ± σ):      2.143 s ±  0.002 s    [User: 2.142 s, System: 0.000 s]
-  Range (min … max):    2.140 s …  2.147 s    10 runs
-
-Summary
-  './jit mandelbrot.bf' ran
-    2.60 ± 0.00 times faster than './bf mandelbrot.bf'
-```
+| Command | Mean [s] | Min [s] | Max [s] | Relative | Note |
+|:---|---:|---:|---:|---:|:---|
+| `./bf programs/mandelbrot.bf` | 2.698 ± 0.003 | 2.694 | 2.704 | 3.25 ± 0.05 | |
+| `./jit programs/mandelbrot.bf` | 0.983 ± 0.003 | 0.980 | 0.990 | 1.18 ± 0.02 | |
+| `./aot -e programs/mandelbrot.bf` | 2.953 ± 0.016 | 2.932 | 2.987 | 3.55 ± 0.05 | JIT interpreted |
+| `./mandelbrot` | 0.831 ± 0.012 | 0.814 | 0.848 | 1.00 | AOT compiled |
