@@ -1,16 +1,16 @@
 CFLAGS += -Wall -Wextra -O2 -march=native -pipe
 
-all: bf jit
+all: aot bf jit
 .PHONY: clean debug fmt
 
 clean:
-	rm -f bf jit
+	rm -f aot bf jit
 
 debug: CFLAGS += -DDEBUG -O0 -g3 -fsanitize=address
-debug: clean bf jit
+debug: clean aot bf jit
 
 fmt:
-	clang-format -i --Werror --style=file bf.c jit.c
+	clang-format -i --Werror --style=file aot.c bf.c jit.c
 
+aot: LDFLAGS += -lgccjit
 jit: LDFLAGS += -ljit
-jit: jit.c
