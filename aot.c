@@ -72,7 +72,7 @@ static struct option longopts[] = {
 
 void version(void) {
   printf("-[----->+<]>---.--.++.--.+++.----.+++[->++<]>+.++++++++++"
-         "+ +++.+++++.>++++++++++.");
+         "+ +++.+++++.>++++++++++.\n");
 }
 
 void usage(FILE *stream) {
