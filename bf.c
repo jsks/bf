@@ -190,8 +190,16 @@ void destroy_program(program_t **program) {
 }
 
 void print_ast(program_t *program) {
-  for (op *p = program->ops; p && p->code != END; p++)
-    printf("%s(%ld, %ld)\n", op_strings[p->code], p->arg, p->offset);
+  for (op *p = program->ops; p && p->code != END; p++) {
+    printf("%s(arg: ", op_strings[p->code]);
+
+    if (p->code == JMP_FWD || p->code == JMP_BCK)
+      printf("%p -> %p", p, p->arg.jmp_addr);
+    else
+      printf("%ld", p->arg.val);
+
+    printf(", offset: %ld)\n", p->offset);
+  }
 
   printf("END\n\n");
 }
