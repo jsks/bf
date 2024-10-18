@@ -35,8 +35,8 @@ classic
 [mandelbrot.bf](http://esoteric.sange.fi/brainfuck/utils/mandelbrot/):
 
 | Command | Mean [s] | Min [s] | Max [s] | Relative | Note |
-|:---|---:|---:|---:|---:|:---|
-| `./bf programs/mandelbrot.bf` | 2.698 ± 0.003 | 2.694 | 2.704 | 3.25 ± 0.05 | |
-| `./jit programs/mandelbrot.bf` | 0.983 ± 0.003 | 0.980 | 0.990 | 1.18 ± 0.02 | |
-| `./aot -e programs/mandelbrot.bf` | 2.953 ± 0.016 | 2.932 | 2.987 | 3.55 ± 0.05 | JIT interpreted |
-| `./mandelbrot` | 0.831 ± 0.012 | 0.814 | 0.848 | 1.00 | AOT compiled |
+|:---|---:|---:|---:|---:|:--|
+| `./bf programs/mandelbrot.bf` | 1.987 ± 0.013 | 1.978 | 2.014 | 2.15 ± 0.04 | |
+| `./jit programs/mandelbrot.bf` | 1.023 ± 0.015 | 1.007 | 1.057 | 1.11 ± 0.03 | |
+| `./aot -e programs/mandelbrot.bf` | 2.739 ± 0.039 | 2.674 | 2.791 | 2.96 ± 0.07 | Jit interpreted |
+| `./mandelbrot` | 0.924 ± 0.016 | 0.904 | 0.955 | 1.00 | AOT compiled |

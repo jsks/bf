@@ -1,4 +1,4 @@
-CFLAGS += -Wall -Wextra -O2 -march=native -pipe
+CFLAGS += -Wall -Wextra -O3 -march=native -pipe
 
 all: aot bf jit
 .PHONY: clean debug fmt
