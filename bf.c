@@ -25,11 +25,12 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <stdalign.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define READ_SIZE 1024 * 8
@@ -38,20 +39,23 @@
 #define STACK_SIZE 256
 #define PROGRAM_SIZE 4096
 
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+
 #ifdef _BF_STRICT_CHECKS
-#define BOUNDS_CHECK(i)                                                        \
-  if (i < 0 || i >= TAPE_SIZE)                                                 \
-    errx(EXIT_FAILURE, "Out-of-bounds memory access at position %d", i);
-#define OVERFLOW_CHECK(arr, pos, x)                                            \
-  if ((arr[pos]) >= INT8_MAX - x)                                              \
-    errx(EXIT_FAILURE, "Integer overflow at position %d", pos);
-#define UNDERFLOW_CHECK(arr, pos, x)                                           \
-  if ((arr[pos]) <= INT8_MIN + x)                                              \
-    errx(EXIT_FAILURE, "Integer underflow at position %d", pos);
+#define BOUNDS_CHECK(tape, ptr)                                                \
+  if ((ptr) < (tape) || (ptr) >= (tape) + TAPE_SIZE)                           \
+    errx(EXIT_FAILURE, "Out of bounds memory access at %d", (ptr) - (tape));
+#define OVERFLOW_CHECK(x, y)                                                   \
+  if ((x) >= INT8_MAX - (y))                                                   \
+    errx(EXIT_FAILURE, "Integer overflow");
+#define UNDERFLOW_CHECK(x, y)                                                  \
+  if ((x) <= INT8_MIN + (y))                                                   \
+    errx(EXIT_FAILURE, "Integer underflow");
 #else
-#define BOUNDS_CHECK(i)
-#define OVERFLOW_CHECK(arr, pos, x)
-#define UNDERFLOW_CHECK(arr, pos, x)
+#define BOUNDS_CHECK(tape, ptr)
+#define OVERFLOW_CHECK(x, y)
+#define UNDERFLOW_CHECK(x, y)
 #endif
 
 #define IS_EMPTY_STACK(stack) (stack.len == 0)
@@ -63,15 +67,15 @@
     stack.data[stack.len++] = x;                                               \
   } while (0)
 
-static const char *op_strings[] = { "ZERO",    "ZEROSEEK", "ADD",
-                                    "MINUS",   "READ",     "PUT",
-                                    "JMP_FWD", "JMP_BCK",  "END" };
+static const char *op_strings[] = { "ADD",      "MINUS",   "ZERO",
+                                    "ZEROSEEK", "READ",    "PUT",
+                                    "JMP_FWD",  "JMP_BCK", "END" };
 
 typedef enum {
-  ZERO,
-  ZEROSEEK,
   ADD,
   MINUS,
+  ZERO,
+  ZEROSEEK,
   READ,
   PUT,
   JMP_FWD,
@@ -90,9 +94,18 @@ static int ncalls[LEN(op_strings)] = { 0 };
 #define TRACE(op)
 #endif
 
-typedef struct {
+#define VAL_ARG(x) ((op_arg){ .val = (x) })
+#define JMP_ARG(x) ((op_arg){ .jmp_addr = (x) })
+
+typedef union {
+  ssize_t val;
+  struct op *jmp_addr;
+} op_arg;
+
+typedef struct op {
   op_code code;
-  ssize_t arg, offset;
+  ssize_t offset;
+  op_arg arg;
 } op;
 
 typedef struct {
@@ -101,7 +114,7 @@ typedef struct {
 } program_t;
 
 typedef struct {
-  ptrdiff_t data[STACK_SIZE];
+  op *data[STACK_SIZE];
   size_t len;
 } lifo;
 
@@ -153,7 +166,7 @@ void resize_program(program_t *program) {
     err(EXIT_FAILURE, NULL);
 }
 
-void add_op(program_t *program, op_code code, ssize_t arg, ssize_t offset) {
+void add_op(program_t *program, op_code code, op_arg arg, ssize_t offset) {
   if (program->n == program->len)
     resize_program(program);
 
@@ -209,8 +222,7 @@ program_t *parse(char *s) {
 
   int ch, prev_token = 0, offset = 0, start_pos = 0;
   char *next_token = NULL;
-  op *p;
-  ptrdiff_t jmp_pos;
+  op *p, *jmp_pos;
   lifo jmp_stack = { 0 };
 
   while ((ch = *s++)) {
@@ -218,7 +230,7 @@ program_t *parse(char *s) {
       continue;
 
     if (ch == prev_token && is_repeatable_token(ch)) {
-      last_op(program)->arg++;
+      last_op(program)->arg.val++;
       continue;
     } else {
       prev_token = ch;
@@ -226,10 +238,10 @@ program_t *parse(char *s) {
 
     switch (ch) {
       case '-':
-        add_op(program, MINUS, 1, offset);
+        add_op(program, MINUS, VAL_ARG(1), offset);
         break;
       case '+':
-        add_op(program, ADD, 1, offset);
+        add_op(program, ADD, VAL_ARG(1), offset);
         break;
       case '<':
         offset--;
@@ -238,18 +250,18 @@ program_t *parse(char *s) {
         offset++;
         break;
       case '.':
-        add_op(program, PUT, 0, offset);
+        add_op(program, PUT, VAL_ARG(0), offset);
         break;
       case ',':
-        add_op(program, READ, 0, offset);
+        add_op(program, READ, VAL_ARG(0), offset);
         break;
       case '[':
         if (*s == '-' && (next_token = peek(s)) && *next_token == ']') {
-          add_op(program, ZERO, 0, offset);
+          add_op(program, ZERO, VAL_ARG(0), offset);
           s = next_token + 1;
         } else {
-          add_op(program, JMP_FWD, 0, offset);
-          PUSH_STACK(jmp_stack, last_op(program) - program->ops);
+          add_op(program, JMP_FWD, JMP_ARG(NULL), offset);
+          PUSH_STACK(jmp_stack, last_op(program));
         }
         break;
       case ']':
@@ -260,10 +272,10 @@ program_t *parse(char *s) {
         if ((p = last_op(program)) && p->code == JMP_FWD) {
           start_pos = p->offset;
           pop_op(program);
-          add_op(program, ZEROSEEK, offset, start_pos);
+          add_op(program, ZEROSEEK, VAL_ARG(offset), start_pos);
         } else {
-          program->ops[jmp_pos].arg = last_op(program) - program->ops + 1;
-          add_op(program, JMP_BCK, jmp_pos, offset);
+          add_op(program, JMP_BCK, JMP_ARG(jmp_pos), offset);
+          jmp_pos->arg.jmp_addr = last_op(program);
         }
         break;
       default:
@@ -277,54 +289,63 @@ program_t *parse(char *s) {
   if (!IS_EMPTY_STACK(jmp_stack))
     errx(EXIT_FAILURE, "Missing closing ']'");
 
-  add_op(program, END, 0, 0);
+  add_op(program, END, VAL_ARG(0), 0);
   return program;
 }
 
 void run(program_t *program) {
-  int8_t tape[TAPE_SIZE] = { 0 };
-  int i = 0;
+  static const void *dispatch_table[] = { &&add,      &&minus,  &&zero,
+                                          &&zeroseek, &&read,   &&put,
+                                          &&jmp_fwd,  &&jmp_bck };
 
-  for (op *p = program->ops; p->code != END; p++) {
-    i += p->offset;
-    BOUNDS_CHECK(i);
+  alignas(64) int8_t tape[TAPE_SIZE] = { 0 };
+  int8_t *restrict ptr = tape;
+
+  for (op *restrict p = program->ops; p->code != END; p++) {
+    ptr += p->offset;
+    BOUNDS_CHECK(tape, ptr);
 
     TRACE(p->code);
-    switch (p->code) {
-      case ZERO:
-        tape[i] = 0;
-        break;
-      case ZEROSEEK:
-        while (tape[i] != 0) {
-          i += p->arg;
-          BOUNDS_CHECK(i);
-        }
-        break;
-      case ADD:
-        OVERFLOW_CHECK(tape, i, p->arg);
-        tape[i] += p->arg;
-        break;
-      case MINUS:
-        UNDERFLOW_CHECK(tape, i, p->arg);
-        tape[i] -= p->arg;
-        break;
-      case READ:
-        tape[i] = getchar_unlocked();
-        break;
-      case PUT:
-        putchar_unlocked(tape[i]);
-        break;
-      case JMP_FWD:
-        if (tape[i] == 0)
-          p = &program->ops[p->arg];
-        break;
-      case JMP_BCK:
-        if (tape[i] != 0)
-          p = &program->ops[p->arg];
-        break;
-      default:
-        break;
+    goto *dispatch_table[p->code];
+
+  add:
+    OVERFLOW_CHECK(*ptr, p->arg.val);
+    *ptr += p->arg.val;
+    continue;
+
+  minus:
+    UNDERFLOW_CHECK(*ptr, p->arg.val);
+    *ptr -= p->arg.val;
+    continue;
+
+  zero:
+    *ptr = 0;
+    continue;
+
+  zeroseek:
+    while (*ptr != 0) {
+      ptr += p->arg.val;
+      BOUNDS_CHECK(tape, ptr);
     }
+    continue;
+
+  read:
+    *ptr = getchar_unlocked();
+    continue;
+
+  put:
+    putchar_unlocked(*ptr);
+    continue;
+
+  jmp_fwd:
+    if (UNLIKELY(*ptr == 0))
+      p = p->arg.jmp_addr;
+    continue;
+
+  jmp_bck:
+    if (LIKELY(*ptr != 0))
+      p = p->arg.jmp_addr;
+    continue;
   }
 }
 
@@ -375,15 +396,15 @@ int main(int argc, char *argv[]) {
     errx(EXIT_FAILURE, "No input file");
   }
 
-  char buffer[MAX_FILE_SIZE] = { 0 };
+  char buffer[MAX_FILE_SIZE];
   read_file(argv[optind], buffer);
 
   program_t *program = parse(buffer);
 
   if (debug_ast)
     print_ast(program);
-
-  run(program);
+  else
+    run(program);
 
 #ifdef DEBUG
   setlocale(LC_NUMERIC, "");
