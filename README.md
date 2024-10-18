@@ -11,13 +11,13 @@ $ ./aot -e <(./aot --version)
 Three programs are included in this repository:
 
 1. `bf.c` is a simple brainfuck interpreter implementing some fairly
-   trivial optimizations.
+   trivial optimizations. Requires gcc/clang specific language extensions.
 
 2. `jit.c` is a JIT compiler using `GNU libjit`.
 
 3. `aot.c` is an ahead-of-time compiler / JIT interpreter using `libgccjit`.
 
-Run `./<program> --help` to get started. Only tested on Linux amd64.
+Compile with `make` and run `./<program> --help` to get started. Only tested on Linux amd64.
 
 For some fun, we can run a [brainfuck
 interpreter](https://esolangs.org/wiki/Dbfi) written in brainfuck that
