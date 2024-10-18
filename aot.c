@@ -33,7 +33,7 @@
 #include <unistd.h>
 
 #define READ_SIZE 1024 * 8
-#define MAX_FILE_SIZE 1024 * 1024 * 8
+#define MAX_FILE_SIZE 1024 * 1024
 #define TAPE_SIZE 30000
 #define STACK_SIZE 256
 
@@ -62,12 +62,12 @@ typedef void (*BF_program)(uint8_t *);
 static const char *progname;
 
 static struct option longopts[] = {
-  {"help",     no_argument,       NULL, 'h'},
-  { "dump",    no_argument,       NULL, 'd'},
-  { "execute", no_argument,       NULL, 'e'},
-  { "outfile", required_argument, NULL, 'o'},
-  { "version", no_argument,       NULL, 'v'},
-  { NULL,      no_argument,       NULL, 0  }
+  { "help",    no_argument,       NULL, 'h' },
+  { "dump",    no_argument,       NULL, 'd' },
+  { "execute", no_argument,       NULL, 'e' },
+  { "outfile", required_argument, NULL, 'o' },
+  { "version", no_argument,       NULL, 'v' },
+  { NULL,      no_argument,       NULL, 0   }
 };
 
 void version(void) {

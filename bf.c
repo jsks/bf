@@ -33,7 +33,7 @@
 #include <unistd.h>
 
 #define READ_SIZE 1024 * 8
-#define MAX_FILE_SIZE 1024 * 1024 * 8
+#define MAX_FILE_SIZE 1024 * 1024
 #define TAPE_SIZE 30000
 #define STACK_SIZE 256
 #define PROGRAM_SIZE 4096
@@ -108,10 +108,10 @@ typedef struct {
 static const char *progname;
 
 static struct option longopts[] = {
-  {"help",       no_argument, NULL, 'h'},
-  { "print-ast", no_argument, NULL, 'p'},
-  { "version",   no_argument, NULL, 'v'},
-  { NULL,        no_argument, NULL, 0  }
+  { "help",      no_argument, NULL, 'h' },
+  { "print-ast", no_argument, NULL, 'p' },
+  { "version",   no_argument, NULL, 'v' },
+  { NULL,        no_argument, NULL, 0   }
 };
 
 void version(void) {
